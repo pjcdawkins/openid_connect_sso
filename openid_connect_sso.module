@@ -6,6 +6,46 @@
  */
 
 /**
+ * Implements hook_menu().
+ */
+function openid_connect_sso_menu() {
+  $items = array();
+  $items['admin/config/services/openid-connect-sso'] = array(
+    'title' => 'OpenID Connect Single Sign-on',
+    'description' => 'Configure single sign-on.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('openid_connect_sso_settings_form'),
+    'access arguments' => array('access administration pages'),
+  );
+
+  return $items;
+}
+
+/**
+ * Form builder: Settings form.
+ */
+function openid_connect_sso_settings_form($form, &$form_state) {
+  $subdomain_url = openid_connect_sso_get_script_url('subdomain');
+  $drupal_url = openid_connect_sso_get_script_url('drupal');
+
+  $link = l(t('documentation'), 'https://drupal.org/node/2274367');
+  $form['documentation_link'] = array(
+    '#markup' => t('Visit the !link for setup instructions.', array('!link' => $link)),
+  );
+  $form['openid_connect_sso_script_location'] = array(
+    '#type' => 'radios',
+    '#title' => t('SSO script location'),
+    '#options' => array(
+      'drupal' => t('Drupal directory: @url', array('@url' => $drupal_url)),
+      'subdomain' => t('Subdomain: @url', array('@url' => $subdomain_url)),
+    ),
+    '#default_value' => variable_get('openid_connect_sso_script_location', 'drupal'),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
  * Implements hook_init().
  *
  * Logout the user if he has the logout cookie (indicating that he has
