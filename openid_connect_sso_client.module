@@ -39,3 +39,13 @@ function openid_connect_sso_client_init() {
     $client->authorize($scopes);
   }
 }
+
+/**
+ * Implements hook_menu_alter().
+ */
+function openid_connect_sso_client_menu_alter(&$items) {
+  // Don't allow users to edit their accounts, that needs to happen
+  // on the server.
+  $items['user/%user/edit']['access callback'] = 'user access';
+  $items['user/%user/edit']['access arguments'] = array('administer users');
+}
