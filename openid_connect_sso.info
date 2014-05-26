@@ -1,0 +1,4 @@
+name = OpenID Connect Single Sign-On
+description = Provides basic SSO functionality.
+core = 7.x
+package = "OAuth2"

@@ -1,0 +1,145 @@
+<?php
+
+/**
+ * @file
+ * Provides basic SSO functionality.
+ */
+
+/**
+ * Implements hook_init().
+ *
+ * Logout the user if he has the logout cookie (indicating that he has
+ * already logged out of one the sites in the network).
+ */
+function openid_connect_sso_init() {
+  global $user;
+
+  $needs_logout = !user_is_anonymous() && isset($_COOKIE['Drupal_visitor_SSOLogout']);
+  // If we're running on the server side, the user might be in the middle of
+  // an OAuth flow. Make sure not to destroy his session in that case.
+  $has_oauth2_query_params = isset($_GET['client_id'], $_GET['redirect_uri']);
+  $has_oauth2_session_params = isset($_SESSION['oauth2_server_authorize']);
+  $oauth2_flow = $has_oauth2_query_params || $has_oauth2_session_params;
+  if ($needs_logout && !$oauth2_flow) {
+    user_logout();
+  }
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ * Request a redirect after a successful login.
+ */
+function openid_connect_sso_user_login(&$edit, $account) {
+  // The presence of a cookie or session param would indicate that the user
+  // is already in the middle of logging into the network.
+  $has_cookie = isset($_COOKIE['Drupal_visitor_SSOLogin']);
+  $has_session_param = isset($_SESSION['oauth2_server_authorize']);
+  if (!$has_cookie && !$has_session_param) {
+    openid_connect_sso_set_redirect('login');
+  }
+
+  if ($has_cookie) {
+    // Remove the cookie, it has done its purpose.
+    $domain = ltrim($_SERVER['HTTP_HOST'], 'a.');
+    setcookie('Drupal.visitor.SSOLogin', 1, time() - 30, '/', $domain);
+  }
+}
+
+/**
+ * Implements hook_user_logout().
+ *
+ * Request a redirect after a successful logout.
+ */
+function openid_connect_sso_user_logout($account) {
+  // The presence of a cookie would indicate that the user is already
+  // in the middle of logging out of the network.
+  if (!isset($_COOKIE['Drupal_visitor_SSOLogout'])) {
+    openid_connect_sso_set_redirect('logout');
+  }
+  else {
+    // Remove the cookie, it has done its purpose.
+    $domain = ltrim($_SERVER['HTTP_HOST'], 'a.');
+    setcookie('Drupal.visitor.SSOLogout', 1, time() - 30, '/', $domain);
+  }
+}
+
+/**
+ * Sets an SSO redirect to be performed on page shutdown.
+ *
+ * @param $type
+ *   The type of redirect to perform. "login" or "logout".
+ */
+function openid_connect_sso_set_redirect($type = NULL) {
+  $redirect = &drupal_static(__FUNCTION__, NULL);
+  if (isset($type)) {
+    $redirect = $type;
+  }
+
+  return $redirect;
+}
+
+/**
+ * Returns the SSO redirect to be performed on page shutdown, if any.
+ */
+function openid_connect_sso_get_redirect() {
+  return openid_connect_sso_set_redirect();
+}
+
+/**
+ * Returns the SSO script url based on the configured location.
+ *
+ * @param $location
+ *   The location of the SSO script. "drupal" or "subdomain".
+ */
+function openid_connect_sso_get_script_url($location) {
+  global $base_url, $is_https;
+
+  $url = '';
+  if ($location == 'drupal') {
+    $url = $base_url . '/sso.php';
+  }
+  elseif ($location == 'subdomain') {
+    $protocol = $is_https ? 'https://' : 'http://';
+    $url = str_replace($protocol, $protocol . 'a.', $base_url);
+  }
+
+  return $url;
+}
+
+/**
+ * Implements hook_exit().
+ *
+ * Redirect to the SSO script, so that we set cookies on each network site.
+ */
+function openid_connect_sso_exit($destination = NULL) {
+  $redirect = openid_connect_sso_get_redirect();
+  $sso_script_location = variable_get('openid_connect_sso_script_location', '');
+  if ($redirect && $sso_script_location) {
+    $url_options = array(
+      'absolute' => TRUE,
+      'query' => array(
+        'op' => $redirect,
+        'origin_host' => $_SERVER['HTTP_HOST'],
+      ),
+    );
+    if ($redirect == 'login') {
+      // A core bug sets $destination to user/login when user/$uid is
+      // requested instead. Even though that works, we set the proper url
+      // here for clarity sake.
+      $login_url = url('user/login', array('absolute' => TRUE));
+      if (empty($destination) || $destination == $login_url) {
+        $destination = url('user', array('absolute' => TRUE));
+      }
+
+      // Set the destination to which the SSO script will return the user.
+      $url_options['query']['destination'] = $destination;
+    }
+
+    // drupal_goto() performs a drupal_exit() which calls hook_exit().
+    // Thus, the redirect is performed manually, to avoid infinite loops.
+    $sso_script_url = openid_connect_sso_get_script_url($sso_script_location);
+    $url = url($sso_script_url, $url_options);
+    header('Location: ' . $url, 302);
+  }
+}

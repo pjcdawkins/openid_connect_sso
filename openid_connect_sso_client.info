@@ -1,0 +1,6 @@
+name = OpenID Connect Single Sign-On
+description = Provides SSO functionality for client sites.
+core = 7.x
+package = "OAuth2"
+dependencies[] = openid_connect
+dependencies[] = openid_connect_sso
