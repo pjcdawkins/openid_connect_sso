@@ -52,8 +52,6 @@ function openid_connect_sso_settings_form($form, &$form_state) {
  * already logged out of one the sites in the network).
  */
 function openid_connect_sso_init() {
-  global $user;
-
   $needs_logout = !user_is_anonymous() && isset($_COOKIE['Drupal_visitor_SSOLogout']);
   // If we're running on the server side, the user might be in the middle of
   // an OAuth flow. Make sure not to destroy his session in that case.
