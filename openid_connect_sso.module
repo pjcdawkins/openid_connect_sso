@@ -59,6 +59,7 @@ function openid_connect_sso_init() {
   $has_oauth2_session_params = isset($_SESSION['oauth2_server_authorize']);
   $oauth2_flow = $has_oauth2_query_params || $has_oauth2_session_params;
   if ($needs_logout && !$oauth2_flow) {
+    module_load_include('pages.inc', 'user');
     user_logout();
   }
 }
