@@ -38,7 +38,7 @@ function openid_connect_sso_client_init() {
 
   if ($new_login || $network_login) {
     $_SESSION['openid_connect_destination'] = $on_user_page ? '<front>' : request_path();
-    $client = openid_connect_get_client('generic');
+    $client = openid_connect_get_client(variable_get('openid_connect_sso_client', 'generic'));
     $scopes = openid_connect_get_scopes();
     $client->authorize($scopes);
   }
@@ -52,4 +52,24 @@ function openid_connect_sso_client_menu_alter(&$items) {
   // on the server.
   $items['user/%user/edit']['access callback'] = 'user_access';
   $items['user/%user/edit']['access arguments'] = array('administer users');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function openid_connect_sso_client_form_openid_connect_sso_settings_form_alter(&$form, &$form_state) {
+  $client_options = array();
+  foreach (openid_connect_get_plugins(TRUE) as $info) {
+    $client_options[$info['name']] = $info['title'];
+  }
+
+  $form['openid_connect_sso_client'] = array(
+    '#type' => 'select',
+    '#title' => t('OpenID Connect client'),
+    '#description' => t('Select the client to use for SSO authorization (enable clients in the <a href="@conf_url">OpenID Connect</a> configuration).', array(
+      '@conf_url' => url('admin/config/services/openid-connect'),
+    )),
+    '#options' => $client_options,
+    '#default_value' => variable_get('openid_connect_sso_client'),
+  );
 }
