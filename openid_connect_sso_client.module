@@ -19,14 +19,18 @@ function openid_connect_sso_client_init() {
   $on_user_page = in_array(request_path(), array('user', 'user/login', 'user/password'));
   $new_login = $anon && $on_user_page && !isset($_GET['admin']);
   $has_cookie = isset($_COOKIE['Drupal_visitor_SSOLogin']);
-  // The session param indicates that an OAuth2 flow was already started,
-  // and the server has just redirected the user back to the redirect callback.
-  $has_session_param = isset($_SESSION['openid_connect_state']);
-  $network_login = $has_cookie && !$has_session_param;
+
+  // This variable indicates that an OAuth2 flow was already started, and the
+  // server has just redirected the user back to the redirect callback.
+  $in_flow = arg(0) == 'openid-connect' && arg(1) && isset($_GET['state']);
+
+  $network_login = $has_cookie && !$in_flow;
+
   if ($network_login && !$anon) {
     // We're supposed to log the user in, but he's already logged in.
     // Destroy his current session and log him out first.
     // This code is the same as user_logout(), but without the redirect.
+    global $user;
     watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
     module_invoke_all('user_logout', $user);
     session_destroy();
