@@ -14,7 +14,7 @@ if (empty($_SERVER['HTTP_HOST'])) {
 // The collection of sites for which this script will create cookies.
 // Don't include the protocol (http://, https://).
 // Example url (SSO script on subdomain): "a.firstsite.com"
-// Example url (SS script in the Drupal directory): "firstsite.com/sso.php"
+// Example url (SSO script in the Drupal directory): "firstsite.com/sso.php"
 $network = array(
   'a.firstsite.com',
   'a.shop.secondsite.com',
@@ -29,13 +29,20 @@ if (!sso_validate_query_params() || count($network) < 2) {
 $_SERVER['HTTP_HOST'] = strtolower($_SERVER['HTTP_HOST']);
 
 $origin_site = $_GET['origin_host'];
+
 // Create a list of sites that need to be visited, by removing the site
 // which started the process and rekeying the array.
 $origin_site_delta = sso_array_search($origin_site, $network);
-unset($network[$origin_site_delta]);
+if ($origin_site_delta === FALSE) {
+  // Search for the origin site again, to account for subdomain-based SSO.
+  $origin_site_delta = sso_array_search('a.' . $origin_site, $network);
+}
+if ($origin_site_delta !== FALSE) {
+  unset($network[$origin_site_delta]);
+}
 $network = array_values($network);
 
-if ($_SERVER['HTTP_HOST'] == $origin_site) {
+if (ltrim($_SERVER['HTTP_HOST'], 'a.') == $origin_site) {
   // We are on the site which has started the process.
   // No need to create the cookie, the site already handled its login / logout.
   // Start from the beginning of the redirect list.
