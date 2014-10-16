@@ -25,21 +25,22 @@ function openid_connect_sso_menu() {
  * Form builder: Settings form.
  */
 function openid_connect_sso_settings_form($form, &$form_state) {
-  $subdomain_url = openid_connect_sso_get_script_url('subdomain');
-  $drupal_url = openid_connect_sso_get_script_url('drupal');
-
   $link = l(t('documentation'), 'https://drupal.org/node/2274367');
   $form['documentation_link'] = array(
     '#markup' => t('Visit the !link for setup instructions.', array('!link' => $link)),
   );
-  $form['openid_connect_sso_script_location'] = array(
-    '#type' => 'radios',
-    '#title' => t('SSO script location'),
-    '#options' => array(
-      'drupal' => t('Drupal directory: @url', array('@url' => $drupal_url)),
-      'subdomain' => t('Subdomain: @url', array('@url' => $subdomain_url)),
-    ),
-    '#default_value' => variable_get('openid_connect_sso_script_location', 'drupal'),
+
+  $form['openid_connect_sso_enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable SSO'),
+    '#default_value' => variable_get('openid_connect_sso_enabled', 0),
+  );
+
+  $form['openid_connect_sso_script_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SSO script URL'),
+    '#description' => t('Set the first URL to visit in the SSO redirection chain.'),
+    '#default_value' => openid_connect_sso_get_script_url(),
   );
 
   return system_settings_form($form);
@@ -127,22 +128,21 @@ function openid_connect_sso_get_redirect() {
 
 /**
  * Returns the SSO script url based on the configured location.
- *
- * @param $location
- *   The location of the SSO script. "drupal" or "subdomain".
  */
-function openid_connect_sso_get_script_url($location) {
+function openid_connect_sso_get_script_url() {
   global $base_url, $is_https;
 
-  $url = '';
+  $location = variable_get('openid_connect_sso_script_location', 'drupal');
+
   if ($location == 'drupal') {
     $url = $base_url . '/sso.php';
   }
-  elseif ($location == 'subdomain') {
+  else {
     $protocol = $is_https ? 'https://' : 'http://';
     $url = str_replace($protocol, $protocol . 'a.', $base_url);
   }
 
+  $url = variable_get('openid_connect_sso_script_url', $url);
   return $url;
 }
 
@@ -152,17 +152,23 @@ function openid_connect_sso_get_script_url($location) {
  * Redirect to the SSO script, so that we set cookies on each network site.
  */
 function openid_connect_sso_exit($destination = NULL) {
+  $enabled = variable_get('openid_connect_sso_enabled', 0);
+  if (!$enabled) {
+    return;
+  }
   $redirect = openid_connect_sso_get_redirect();
-  $sso_script_location = variable_get('openid_connect_sso_script_location', '');
-  if ($redirect && $sso_script_location) {
-    $url_options = array(
-      'absolute' => TRUE,
-      'query' => array(
-        'op' => $redirect,
-        'origin_host' => $_SERVER['HTTP_HOST'],
-      ),
-    );
-    if ($redirect == 'login') {
+  if (!$redirect) {
+    return;
+  }
+
+  $url_options = array(
+    'absolute' => TRUE,
+    'query' => array(
+      'op' => $redirect,
+      'origin_host' => $_SERVER['HTTP_HOST'],
+    ),
+  );
+  if ($redirect == 'login') {
       // The $destination parameter is only set if this is invoked via
       // drupal_goto().
       if ($destination === NULL) {
@@ -179,22 +185,21 @@ function openid_connect_sso_exit($destination = NULL) {
         $destination = url($path, $options);
       }
 
-      // A core bug sets $destination to user/login when user/$uid is
-      // requested instead. Even though that works, we set the proper url
-      // here for clarity sake.
-      $login_url = url('user/login', array('absolute' => TRUE));
-      if (empty($destination) || $destination == $login_url) {
-        $destination = url('user', array('absolute' => TRUE));
-      }
-
-      // Set the destination to which the SSO script will return the user.
-      $url_options['query']['destination'] = $destination;
+    // A core bug sets $destination to user/login when user/$uid is
+    // requested instead. Even though that works, we set the proper url
+    // here for clarity sake.
+    $login_url = url('user/login', array('absolute' => TRUE));
+    if (empty($destination) || $destination == $login_url) {
+      $destination = url('user', array('absolute' => TRUE));
     }
 
-    // drupal_goto() performs a drupal_exit() which calls hook_exit().
-    // Thus, the redirect is performed manually, to avoid infinite loops.
-    $sso_script_url = openid_connect_sso_get_script_url($sso_script_location);
-    $url = url($sso_script_url, $url_options);
-    header('Location: ' . $url, 302);
+    // Set the destination to which the SSO script will return the user.
+    $url_options['query']['destination'] = $destination;
   }
+
+  // drupal_goto() performs a drupal_exit() which calls hook_exit().
+  // Thus, the redirect is performed manually, to avoid infinite loops.
+  $sso_script_url = openid_connect_sso_get_script_url();
+  $url = url($sso_script_url, $url_options);
+  header('Location: ' . $url, 302);
 }
