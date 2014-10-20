@@ -163,6 +163,22 @@ function openid_connect_sso_exit($destination = NULL) {
       ),
     );
     if ($redirect == 'login') {
+      // The $destination parameter is only set if this is invoked via
+      // drupal_goto().
+      if ($destination === NULL) {
+        $options = array('absolute' => TRUE);
+        if (isset($_GET['destination'])) {
+          $path = $_GET['destination'];
+        }
+        else {
+          $path = $_GET['q'];
+          if ($query = drupal_get_query_parameters()) {
+            $options['query'] = $query;
+          }
+        }
+        $destination = url($path, $options);
+      }
+
       // A core bug sets $destination to user/login when user/$uid is
       // requested instead. Even though that works, we set the proper url
       // here for clarity sake.
