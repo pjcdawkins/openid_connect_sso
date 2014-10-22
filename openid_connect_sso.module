@@ -39,11 +39,35 @@ function openid_connect_sso_settings_form($form, &$form_state) {
   $form['openid_connect_sso_script_url'] = array(
     '#type' => 'textfield',
     '#title' => t('SSO script URL'),
-    '#description' => t('Set the first URL to visit in the SSO redirection chain.'),
+    '#description' => t('The first URL to visit in the SSO redirection chain.'),
     '#default_value' => openid_connect_sso_get_script_url(),
   );
 
+  $form['openid_connect_sso_cookie_domain'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Cookie domain'),
+    '#description' => t('The domain name to use when clearing SSO cookies.'),
+    '#default_value' => variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']),
+    '#element_validate' => array('openid_connect_sso_validate_cookie_domain'),
+    '#required' => TRUE,
+  );
+
   return system_settings_form($form);
+}
+
+/**
+ * Validate the cookie domain.
+ */
+function openid_connect_sso_validate_cookie_domain(&$element, &$form_state) {
+  $domain = ltrim($element['#value'], '.');
+  if (parse_url('http://' . $domain, PHP_URL_HOST) != $domain) {
+    form_error($element, t('Invalid cookie domain'));
+  }
+  if (strpos($_SERVER['HTTP_HOST'], $domain) === FALSE) {
+    form_error($element, t('The cookie domain does not match the current host, %hostname', array(
+      '%hostname' => $_SERVER['HTTP_HOST'],
+    )));
+  }
 }
 
 /**
@@ -66,6 +90,17 @@ function openid_connect_sso_init() {
 }
 
 /**
+ * Ensure that a cookie is removed for the correct domain.
+ *
+ * @param string $name
+ */
+function openid_connect_sso_remove_cookie($name) {
+  $cookie_domain = variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']);
+  $cookie_domain = '.' . ltrim($cookie_domain, '.');
+  setcookie($name, '', time() - 3600, '/', $cookie_domain);
+}
+
+/**
  * Implements hook_user_login().
  *
  * Request a redirect after a successful login.
@@ -80,9 +115,7 @@ function openid_connect_sso_user_login(&$edit, $account) {
   }
 
   if ($has_cookie) {
-    // Remove the cookie, it has done its purpose.
-    $domain = ltrim($_SERVER['HTTP_HOST'], 'a.');
-    setcookie('Drupal.visitor.SSOLogin', 1, time() - 30, '/', $domain);
+    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogin');
   }
 }
 
@@ -99,8 +132,7 @@ function openid_connect_sso_user_logout($account) {
   }
   else {
     // Remove the cookie, it has done its purpose.
-    $domain = ltrim($_SERVER['HTTP_HOST'], 'a.');
-    setcookie('Drupal.visitor.SSOLogout', 1, time() - 30, '/', $domain);
+    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogout');
   }
 }
 
