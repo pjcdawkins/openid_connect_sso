@@ -12,6 +12,7 @@ function openid_connect_sso_uninstall() {
   variable_del('openid_connect_sso_enabled');
   variable_del('openid_connect_sso_script_location');
   variable_del('openid_connect_sso_script_url');
+  variable_del('openid_connect_sso_cookie_domain');
 }
 
 /**
