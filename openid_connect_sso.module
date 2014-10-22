@@ -74,14 +74,29 @@ function openid_connect_sso_validate_cookie_domain(&$element, &$form_state) {
  */
 function openid_connect_sso_init() {
   $needs_logout = !user_is_anonymous() && isset($_COOKIE['Drupal_visitor_SSOLogout']);
-  // If we're running on the server side, the user might be in the middle of
-  // an OAuth flow. Make sure not to destroy his session in that case.
-  $has_oauth2_query_params = isset($_GET['client_id'], $_GET['redirect_uri']);
-  $has_oauth2_session_params = isset($_SESSION['oauth2_server_authorize']);
-  $oauth2_flow = $has_oauth2_query_params || $has_oauth2_session_params;
-  if ($needs_logout && !$oauth2_flow) {
-    module_load_include('pages.inc', 'user');
-    user_logout();
+  if ($needs_logout) {
+    // The user might be trying to log in, having already logged out on a
+    // client site. In that case, we want to log the user out and redirect back
+    // to the same page.
+    $oauth2_login = isset($_GET['client_id'], $_GET['redirect_uri']) && $_GET['q'] == 'oauth2/authorize';
+
+    if ($oauth2_login) {
+      // Log out the user manually. We can't use user_logout(), because we want
+      // to skip a drupal_goto().
+      global $user;
+      watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
+      module_invoke_all('user_logout', $user);
+      session_destroy();
+      $user = drupal_anonymous_user();
+    }
+    else {
+      module_load_include('pages.inc', 'user');
+      user_logout();
+    }
+  }
+  elseif (isset($_COOKIE['Drupal_visitor_SSOLogout'])) {
+    // Ensure that the logout cookie is removed.
+    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogout');
   }
 }
 
@@ -94,6 +109,8 @@ function openid_connect_sso_remove_cookie($name) {
   $cookie_domain = variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']);
   $cookie_domain = '.' . ltrim($cookie_domain, '.');
   setcookie($name, '', time() - 3600, '/', $cookie_domain);
+  $name_as_key = str_replace('.', '_', $name);
+  unset($_COOKIE[$name_as_key]);
 }
 
 /**
