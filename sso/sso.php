@@ -11,7 +11,7 @@ if (empty($_SERVER['HTTP_HOST'])) {
   exit;
 }
 
-// The collection of sites for which this script will create cookies.
+// The collection of SSO script addresses which form the redirection network.
 // Don't include the protocol (http://, https://).
 // Example url (SSO script on subdomain): "a.firstsite.com"
 // Example url (SSO script in the Drupal directory): "firstsite.com/sso.php"
@@ -20,42 +20,59 @@ $network = array(
   'a.shop.secondsite.com',
 );
 
+// An array of network domain names. The keys are potential origin host names
+// which do not appear in the list above, and each value is the cookie domain
+// name for that host.
+// $domains = array();
+
+// Enable HTTPS for all redirect URLs.
+// $https = true;
+
 // Validate the query parameters and network size.
 if (!sso_validate_query_params() || count($network) < 2) {
   exit;
 }
 
 // $_SERVER['HTTP_HOST'] is lowercased here per specifications.
-$_SERVER['HTTP_HOST'] = strtolower($_SERVER['HTTP_HOST']);
+$host = strtolower($_SERVER['HTTP_HOST']);
 
-$origin_site = $_GET['origin_host'];
+$origin_host = $_GET['origin_host'];
+$origin_domain = isset($domains[$origin_host]) ? $domains[$origin_host] : $origin_host;
 
-// Create a list of sites that need to be visited, by removing the site
-// which started the process and rekeying the array.
-$origin_site_delta = sso_array_search($origin_site, $network);
-if ($origin_site_delta === FALSE) {
-  // Search for the origin site again, to account for subdomain-based SSO.
-  $origin_site_delta = sso_array_search('a.' . $origin_site, $network);
-}
-if ($origin_site_delta !== FALSE) {
-  unset($network[$origin_site_delta]);
+// Find the next site that needs to be visited in the $network, by removing
+// the origin site re-keying the array.
+foreach ($network as $delta => $site) {
+  if (strpos($site, $host) !== FALSE || strpos($site, 'a.' . $host) !== FALSE) {
+    unset($network[$delta]);
+  }
 }
 $network = array_values($network);
 
-if (ltrim($_SERVER['HTTP_HOST'], 'a.') == $origin_site) {
+if (ltrim($host, 'a.') == $origin_domain) {
   // We are on the site which has started the process.
   // No need to create the cookie, the site already handled its login / logout.
   // Start from the beginning of the redirect list.
-  $redirect_destination = sso_redirect_url($network[0]);
+  $redirect_destination = sso_redirect_url($network[0], !empty($https));
 }
 else {
   sso_create_cookie($_GET['op']);
 
-  $current_site_delta = sso_array_search($_SERVER['HTTP_HOST'], $network);
+  foreach ($network as $delta => $site) {
+    if (strpos($site, $host) !== FALSE || strpos($site, 'a.' . $host) !== FALSE) {
+      $current_site_delta = $delta;
+      break;
+    }
+  }
+
+  if (!isset($current_site_delta)) {
+    trigger_error('Current site not found in network', E_USER_ERROR);
+    exit;
+  }
+
   $next_site_delta = $current_site_delta + 1;
   if (isset($network[$next_site_delta])) {
     // Redirect to the next network site.
-    $redirect_destination = sso_redirect_url($network[$next_site_delta]);
+    $redirect_destination = sso_redirect_url($network[$next_site_delta], !empty($https));
   }
   else {
     // We are at the last network site. In these scenarios, we need to
@@ -64,12 +81,15 @@ else {
       $redirect_destination = $_GET['destination'];
     }
     else {
-      $redirect_destination = 'http://' . $_GET['origin_host'];
+      $redirect_destination = ($https ? 'https://' : 'http://') . $_GET['origin_host'];
     }
   }
 }
 
-// Redirect the user.
+// Redirect the user. We need to prevent the redirect from being cached.
+header('Cache-Control: max-age=0', TRUE);
+header('Expires: Sun, 09 Aug 1987 22:00:00 +0100', TRUE);
+header('Pragma: no-cache', TRUE);
 header('Location: ' . $redirect_destination, TRUE, 302);
 exit;
 
@@ -114,37 +134,33 @@ function sso_create_cookie($operation) {
     $create = 'Drupal.visitor.SSOLogout';
   }
 
-  $domain = ltrim($_SERVER['HTTP_HOST'], 'a.');
-  setcookie($remove, '', time() - 3600, '/', $domain);
+  global $https;
+  $secure = !empty($https);
+
+  $domain = ltrim(strtolower($_SERVER['HTTP_HOST']), 'a.');
+
+  setcookie($remove, '', time() - 3600, '/', $domain, $secure);
   // The expiration should be less than the Drupal session duration.
   // The most common Drupal `session.gc_maxlifetime` value is 200000 seconds,
   // so we define the expiration to half a minute before that, accordingly.
-  setcookie($create, 1, time() + 200000 - 30, '/', $domain);
+  setcookie($create, 1, time() + 200000 - 30, '/', $domain, $secure);
 }
 
 /**
  * Returns an URL to which redirection can be issued.
+ *
+ * @param string $host
+ * @param bool $https
+ * @return string
  */
-function sso_redirect_url($host) {
-  $url = 'http://' . $host . '?op=' . $_GET['op'] . '&origin_host=' . $_GET['origin_host'];
+function sso_redirect_url($host, $https) {
+  $url = '';
+  if (!strpos($host, '//')) {
+    $url .= $https ? 'https://' : 'http://';
+  }
+  $url .= $host . '?op=' . $_GET['op'] . '&origin_host=' . $_GET['origin_host'];
   if ($_GET['op'] == 'login') {
     $url .= '&destination=' . $_GET['destination'];
   }
   return $url;
-}
-
-/**
- * Same as array_search, but does a STARTS_WITH instead of a "=" comparison.
- *
- * Useful for matching network urls while not caring about the script names
- * such as "/index.php" or "/sso.php".
- */
-function sso_array_search($needle, $haystack) {
-  foreach ($haystack as $key => $value) {
-    if (strpos($value, $needle) === 0) {
-      return $key;
-    }
-  }
-
-  return FALSE;
 }
