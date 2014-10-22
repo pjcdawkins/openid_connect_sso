@@ -46,10 +46,9 @@ function openid_connect_sso_settings_form($form, &$form_state) {
   $form['openid_connect_sso_cookie_domain'] = array(
     '#type' => 'textfield',
     '#title' => t('Cookie domain'),
-    '#description' => t('The domain name to use when clearing SSO cookies.'),
-    '#default_value' => variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']),
+    '#description' => t('The domain name to use when clearing SSO cookies. Leave this blank to use the current host name.'),
+    '#default_value' => variable_get('openid_connect_sso_cookie_domain'),
     '#element_validate' => array('openid_connect_sso_validate_cookie_domain'),
-    '#required' => TRUE,
   );
 
   return system_settings_form($form);
@@ -59,14 +58,11 @@ function openid_connect_sso_settings_form($form, &$form_state) {
  * Validate the cookie domain.
  */
 function openid_connect_sso_validate_cookie_domain(&$element, &$form_state) {
-  $domain = ltrim($element['#value'], '.');
-  if (parse_url('http://' . $domain, PHP_URL_HOST) != $domain) {
-    form_error($element, t('Invalid cookie domain'));
-  }
-  if (strpos($_SERVER['HTTP_HOST'], $domain) === FALSE) {
-    form_error($element, t('The cookie domain does not match the current host, %hostname', array(
-      '%hostname' => $_SERVER['HTTP_HOST'],
-    )));
+  if (strlen($element['#value'])) {
+    $domain = ltrim($element['#value'], '.');
+    if (parse_url('http://' . $domain, PHP_URL_HOST) != $domain) {
+      form_error($element, t('Invalid cookie domain'));
+    }
   }
 }
 
