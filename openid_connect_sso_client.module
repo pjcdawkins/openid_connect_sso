@@ -37,8 +37,11 @@ function openid_connect_sso_client_init() {
   }
 
   if ($new_login || $network_login) {
+    $_SESSION['openid_connect_destination'] = '<front>';
     $destination = drupal_get_destination();
-    $_SESSION['openid_connect_destination'] = strpos($destination['destination'], 'user') === 0 ? $destination['destination'] : '<front>';
+    if (!in_array($destination['destination'], array('user', 'user/login', 'user/password'))) {
+      $_SESSION['openid_connect_destination'] = $destination['destination'];
+    }
     $client = openid_connect_get_client(variable_get('openid_connect_sso_client', 'generic'));
     $scopes = openid_connect_get_scopes();
     $client->authorize($scopes);
