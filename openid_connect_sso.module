@@ -198,3 +198,25 @@ function openid_connect_sso_exit($destination = NULL) {
     header('Location: ' . $url, 302);
   }
 }
+
+/**
+ * Implements hook_boot().
+ */
+function openid_connect_sso_boot() {
+  // Disable the page cache if the login cookie is set.
+  if (!empty($_COOKIE['Drupal_visitor_SSOLogin'])) {
+    drupal_page_is_cacheable(FALSE);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function openid_connect_sso_module_implements_alter(&$implementations, $hook) {
+  // Move our hook_boot() implementation to the end of the list.
+  if ($hook == 'boot') {
+    $ours = $implementations['openid_connect_sso'];
+    unset($implementations['openid_connect_sso']);
+    $implementations['openid_connect_sso'] = $ours;
+  }
+}
