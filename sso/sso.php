@@ -141,7 +141,7 @@ function sso_create_cookie($operation) {
 
   $domain = ltrim(strtolower($_SERVER['HTTP_HOST']), 'a.');
 
-  if (!empty($_GLOBALS['cookie_name_strict'])) {
+  if (!empty($GLOBALS['cookie_name_strict'])) {
     $remove .= '_' . $domain;
     $create .= '_' . $domain;
   }
