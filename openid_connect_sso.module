@@ -69,7 +69,7 @@ function openid_connect_sso_validate_cookie_domain(&$element, &$form_state) {
 /**
  * Implements hook_init().
  *
- * Logout the user if he has the logout cookie (indicating that he has
+ * Log out the user if he has the logout cookie (indicating that he has
  * already logged out of one the sites in the network).
  */
 function openid_connect_sso_init() {
@@ -82,11 +82,17 @@ function openid_connect_sso_init() {
 
     if ($oauth2_login) {
       // Log out the user manually. We can't use user_logout(), because we want
-      // to skip a drupal_goto().
+      // to skip its drupal_goto() call.
       global $user;
       watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
       module_invoke_all('user_logout', $user);
+
+      // Destroy the session except for OAuth2 Server data, so that the correct
+      // redirect information can be persisted.
+      $oauth2_params = isset($_SESSION['oauth2_server_authorize']) ? $_SESSION['oauth2_server_authorize'] : NULL;
       session_destroy();
+      $_SESSION['oauth2_server_authorize'] = $oauth2_params;
+
       $user = drupal_anonymous_user();
     }
     else {
