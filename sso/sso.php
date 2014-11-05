@@ -42,7 +42,7 @@ $origin_domain = isset($domains[$origin_host]) ? $domains[$origin_host] : $origi
 // Find the next site that needs to be visited in the $network, by removing
 // the origin site re-keying the array.
 foreach ($network as $delta => $site) {
-  if (strpos($site, $origin_host) !== FALSE || strpos($site, 'a.' . $origin_host) !== FALSE) {
+  if (strpos($site, $origin_domain) !== FALSE || strpos($site, 'a.' . $origin_domain) !== FALSE) {
     unset($network[$delta]);
   }
 }
