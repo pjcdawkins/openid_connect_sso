@@ -69,11 +69,11 @@ function openid_connect_sso_validate_cookie_domain(&$element, &$form_state) {
 /**
  * Implements hook_init().
  *
- * Logout the user if he has the logout cookie (indicating that he has
+ * Log out the user if he has the logout cookie (indicating that he has
  * already logged out of one the sites in the network).
  */
 function openid_connect_sso_init() {
-  $needs_logout = !user_is_anonymous() && isset($_COOKIE['Drupal_visitor_SSOLogout']);
+  $needs_logout = !user_is_anonymous() && openid_connect_sso_detect_cookie('logout');
   if ($needs_logout) {
     // The user might be trying to log in, having already logged out on a
     // client site. In that case, we want to log the user out and redirect back
@@ -82,11 +82,12 @@ function openid_connect_sso_init() {
 
     if ($oauth2_login) {
       // Log out the user manually. We can't use user_logout(), because we want
-      // to skip a drupal_goto().
+      // to skip its drupal_goto() call.
       global $user;
       watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
       module_invoke_all('user_logout', $user);
       session_destroy();
+
       $user = drupal_anonymous_user();
     }
     else {
@@ -94,23 +95,82 @@ function openid_connect_sso_init() {
       user_logout();
     }
   }
-  elseif (isset($_COOKIE['Drupal_visitor_SSOLogout'])) {
+  else {
     // Ensure that the logout cookie is removed.
-    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogout');
+    openid_connect_sso_remove_cookie('logout');
   }
+}
+
+/**
+ * Get the configured cookie domain.
+ *
+ * @return string
+ */
+function openid_connect_sso_get_cookie_domain() {
+  $cookie_domain = variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']);
+  return ltrim($cookie_domain, '.');
+}
+
+/**
+ * Detect whether a valid cookie is set for the correct domain.
+ *
+ * @param string $op
+ *   The operation: 'logout' or 'login'.
+ *
+ * @throws InvalidArgumentException for an invalid $op
+ *
+ * @return bool
+ *   TRUE if the cookie is set, FALSE if not.
+ */
+function openid_connect_sso_detect_cookie($op) {
+  switch ($op) {
+    case 'logout':
+      $name_as_key = 'Drupal_visitor_SSOLogout';
+      break;
+
+    case 'login':
+      $name_as_key = 'Drupal_visitor_SSOLogin';
+      break;
+
+    default:
+      throw new InvalidArgumentException('Invalid operation: ' . $op);
+  }
+  if (!empty($_COOKIE[$name_as_key])) {
+    return TRUE;
+  }
+  $cookie_domain = openid_connect_sso_get_cookie_domain();
+  return !empty($_COOKIE[$name_as_key . '_' . $cookie_domain]);
 }
 
 /**
  * Ensure that a cookie is removed for the correct domain.
  *
- * @param string $name
+ * @param string $op
  */
-function openid_connect_sso_remove_cookie($name) {
-  $cookie_domain = variable_get('openid_connect_sso_cookie_domain', $_SERVER['HTTP_HOST']);
-  $cookie_domain = '.' . ltrim($cookie_domain, '.');
-  setcookie($name, '', time() - 3600, '/', $cookie_domain);
-  $name_as_key = str_replace('.', '_', $name);
-  unset($_COOKIE[$name_as_key]);
+function openid_connect_sso_remove_cookie($op) {
+  switch ($op) {
+    case 'logout':
+      $cookie_name = 'Drupal.visitor.SSOLogout';
+      $name_as_key = 'Drupal_visitor_SSOLogout';
+      break;
+
+    case 'login':
+      $cookie_name = 'Drupal.visitor.SSOLogin';
+      $name_as_key = 'Drupal_visitor_SSOLogin';
+      break;
+
+    default:
+      throw new InvalidArgumentException('Invalid operation: ' . $op);
+  }
+  $cookie_domain = openid_connect_sso_get_cookie_domain();
+  if (isset($_COOKIE[$name_as_key])) {
+    setcookie($cookie_name, '', time() - 3600, '/', $cookie_domain);
+    unset($_COOKIE[$name_as_key]);
+  }
+  elseif (isset($_COOKIE[$name_as_key . '_' . $cookie_domain])) {
+    setcookie($cookie_name . '_' . $cookie_domain, '', time() - 3600, '/', $cookie_domain);
+    unset($_COOKIE[$name_as_key . '_' . $cookie_domain]);
+  }
 }
 
 /**
@@ -121,14 +181,14 @@ function openid_connect_sso_remove_cookie($name) {
 function openid_connect_sso_user_login(&$edit, $account) {
   // The presence of a cookie or session param would indicate that the user
   // is already in the middle of logging into the network.
-  $has_cookie = isset($_COOKIE['Drupal_visitor_SSOLogin']);
+  $has_cookie = openid_connect_sso_detect_cookie('login');
   $has_session_param = isset($_SESSION['oauth2_server_authorize']);
   if (!$has_cookie && !$has_session_param) {
     openid_connect_sso_set_redirect('login');
   }
 
   if ($has_cookie) {
-    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogin');
+    openid_connect_sso_remove_cookie('login');
   }
 }
 
@@ -140,12 +200,12 @@ function openid_connect_sso_user_login(&$edit, $account) {
 function openid_connect_sso_user_logout($account) {
   // The presence of a cookie would indicate that the user is already
   // in the middle of logging out of the network.
-  if (!isset($_COOKIE['Drupal_visitor_SSOLogout'])) {
+  if (!openid_connect_sso_detect_cookie('logout')) {
     openid_connect_sso_set_redirect('logout');
   }
   else {
     // Remove the cookie, it has done its purpose.
-    openid_connect_sso_remove_cookie('Drupal.visitor.SSOLogout');
+    openid_connect_sso_remove_cookie('logout');
   }
 }
 

@@ -28,6 +28,9 @@ $network = array(
 // Enable HTTPS for all redirect URLs.
 // $https = true;
 
+// Enable adding the domain name to the cookie name.
+// $cookie_name_strict = true;
+
 // Validate the query parameters and network size.
 if (!sso_validate_query_params() || count($network) < 2) {
   exit;
@@ -134,10 +137,14 @@ function sso_create_cookie($operation) {
     $create = 'Drupal.visitor.SSOLogout';
   }
 
-  global $https;
-  $secure = !empty($https);
+  $secure = !empty($GLOBALS['https']);
 
   $domain = ltrim(strtolower($_SERVER['HTTP_HOST']), 'a.');
+
+  if (!empty($_GLOBALS['cookie_name_strict'])) {
+    $remove .= '_' . $domain;
+    $create .= '_' . $domain;
+  }
 
   setcookie($remove, '', time() - 3600, '/', $domain, $secure);
   // The expiration should be less than the Drupal session duration.
