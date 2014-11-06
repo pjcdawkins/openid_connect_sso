@@ -45,7 +45,7 @@ $origin_domain = isset($domains[$origin_host]) ? $domains[$origin_host] : $origi
 // Find the next site that needs to be visited in the $network, by removing
 // the origin site re-keying the array.
 foreach ($network as $delta => $site) {
-  if (strpos($site, $origin_domain) !== FALSE || strpos($site, 'a.' . $origin_domain) !== FALSE) {
+  if (strpos($site, $origin_domain) === 0 || strpos($site, 'a.' . $origin_domain) === 0) {
     unset($network[$delta]);
   }
 }
@@ -61,7 +61,7 @@ else {
   sso_create_cookie($_GET['op']);
 
   foreach ($network as $delta => $site) {
-    if (strpos($site, $host) !== FALSE || strpos($site, 'a.' . $host) !== FALSE) {
+    if (strpos($site, $host) === 0 || strpos($site, 'a.' . $host) === 0) {
       $current_site_delta = $delta;
       break;
     }
