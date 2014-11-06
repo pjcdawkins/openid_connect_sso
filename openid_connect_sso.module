@@ -112,34 +112,58 @@ function openid_connect_sso_get_cookie_domain() {
 }
 
 /**
- * Detect whether a valid cookie is set for the correct domain.
+ * Get the cookie name for a given operation.
  *
  * @param string $op
  *   The operation: 'logout' or 'login'.
+ * @param bool $as_key
+ *   Whether to return the name as appropriate for an array key in $_COOKIE,
+ *   i.e. with '.' replaced with '_'.
+ * @param bool $with_domain
+ *   Whether to add the domain name to the cookie name.
  *
  * @throws InvalidArgumentException for an invalid $op
  *
- * @return bool
- *   TRUE if the cookie is set, FALSE if not.
+ * @return string
  */
-function openid_connect_sso_detect_cookie($op) {
+function openid_connect_sso_get_cookie_name($op, $as_key = FALSE, $with_domain = FALSE) {
   switch ($op) {
     case 'logout':
-      $name_as_key = 'Drupal_visitor_SSOLogout';
+      $cookie_name = 'Drupal.visitor.SSOLogout';
       break;
 
     case 'login':
-      $name_as_key = 'Drupal_visitor_SSOLogin';
+      $cookie_name = 'Drupal.visitor.SSOLogin';
       break;
 
     default:
       throw new InvalidArgumentException('Invalid operation: ' . $op);
   }
+  if ($with_domain) {
+    $cookie_name .= '_' . openid_connect_sso_get_cookie_domain();
+  }
+  if ($as_key) {
+    return str_replace('.', '_', $cookie_name);
+  }
+  return $cookie_name;
+}
+
+/**
+ * Detect whether a valid cookie is set for the correct domain.
+ *
+ * @param string $op
+ *   The operation: 'logout' or 'login'.
+ *
+ * @return bool
+ *   TRUE if the cookie is set, FALSE if not.
+ */
+function openid_connect_sso_detect_cookie($op) {
+  $name_as_key = openid_connect_sso_get_cookie_name($op, TRUE);
   if (!empty($_COOKIE[$name_as_key])) {
     return TRUE;
   }
-  $cookie_domain = openid_connect_sso_get_cookie_domain();
-  return !empty($_COOKIE[$name_as_key . '_' . $cookie_domain]);
+  $with_domain = openid_connect_sso_get_cookie_name($op, TRUE, TRUE);
+  return !empty($_COOKIE[$with_domain]);
 }
 
 /**
@@ -148,28 +172,18 @@ function openid_connect_sso_detect_cookie($op) {
  * @param string $op
  */
 function openid_connect_sso_remove_cookie($op) {
-  switch ($op) {
-    case 'logout':
-      $cookie_name = 'Drupal.visitor.SSOLogout';
-      $name_as_key = 'Drupal_visitor_SSOLogout';
-      break;
-
-    case 'login':
-      $cookie_name = 'Drupal.visitor.SSOLogin';
-      $name_as_key = 'Drupal_visitor_SSOLogin';
-      break;
-
-    default:
-      throw new InvalidArgumentException('Invalid operation: ' . $op);
-  }
+  $cookie_name = openid_connect_sso_get_cookie_name($op);
+  $name_as_key = openid_connect_sso_get_cookie_name($op, TRUE);
   $cookie_domain = openid_connect_sso_get_cookie_domain();
   if (isset($_COOKIE[$name_as_key])) {
     setcookie($cookie_name, '', time() - 3600, '/', $cookie_domain);
     unset($_COOKIE[$name_as_key]);
   }
-  elseif (isset($_COOKIE[$name_as_key . '_' . $cookie_domain])) {
-    setcookie($cookie_name . '_' . $cookie_domain, '', time() - 3600, '/', $cookie_domain);
-    unset($_COOKIE[$name_as_key . '_' . $cookie_domain]);
+  $extended_name_as_key = $name_as_key . '_' . str_replace('.', '_', $cookie_domain);
+  if (isset($_COOKIE[$extended_name_as_key])) {
+    $extended_name = $cookie_name . '_' . $cookie_domain;
+    setcookie($extended_name, '', time() - 3600, '/', $cookie_domain);
+    unset($_COOKIE[$extended_name_as_key]);
   }
 }
 
