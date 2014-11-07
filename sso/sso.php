@@ -28,6 +28,9 @@ $network = array(
 // Enable HTTPS for all redirect URLs.
 // $https = true;
 
+// Enable adding the domain name to the cookie name.
+// $cookie_name_strict = true;
+
 // Validate the query parameters and network size.
 if (!sso_validate_query_params() || count($network) < 2) {
   exit;
@@ -42,7 +45,7 @@ $origin_domain = isset($domains[$origin_host]) ? $domains[$origin_host] : $origi
 // Find the next site that needs to be visited in the $network, by removing
 // the origin site re-keying the array.
 foreach ($network as $delta => $site) {
-  if (strpos($site, $origin_domain) !== FALSE || strpos($site, 'a.' . $origin_domain) !== FALSE) {
+  if (strpos($site, $origin_domain) === 0 || strpos($site, 'a.' . $origin_domain) === 0) {
     unset($network[$delta]);
   }
 }
@@ -58,7 +61,7 @@ else {
   sso_create_cookie($_GET['op']);
 
   foreach ($network as $delta => $site) {
-    if (strpos($site, $host) !== FALSE || strpos($site, 'a.' . $host) !== FALSE) {
+    if (strpos($site, $host) === 0 || strpos($site, 'a.' . $host) === 0) {
       $current_site_delta = $delta;
       break;
     }
@@ -134,10 +137,14 @@ function sso_create_cookie($operation) {
     $create = 'Drupal.visitor.SSOLogout';
   }
 
-  global $https;
-  $secure = !empty($https);
+  $secure = !empty($GLOBALS['https']);
 
   $domain = ltrim(strtolower($_SERVER['HTTP_HOST']), 'a.');
+
+  if (!empty($GLOBALS['cookie_name_strict'])) {
+    $remove .= '_' . $domain;
+    $create .= '_' . $domain;
+  }
 
   setcookie($remove, '', time() - 3600, '/', $domain, $secure);
   // The expiration should be less than the Drupal session duration.

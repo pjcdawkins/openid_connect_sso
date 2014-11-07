@@ -18,7 +18,7 @@ function openid_connect_sso_client_init() {
   $anon = user_is_anonymous();
   $on_user_page = in_array(request_path(), array('user', 'user/login', 'user/password'));
   $new_login = $anon && $on_user_page && !isset($_GET['admin']);
-  $has_cookie = isset($_COOKIE['Drupal_visitor_SSOLogin']);
+  $has_cookie = openid_connect_sso_detect_cookie('login');
 
   // This variable indicates that an OAuth2 flow was already started, and the
   // server has just redirected the user back to the redirect callback.
@@ -44,6 +44,7 @@ function openid_connect_sso_client_init() {
     }
     $client = openid_connect_get_client(variable_get('openid_connect_sso_client', 'generic'));
     $scopes = openid_connect_get_scopes();
+    openid_connect_sso_remove_cookie('login');
     $client->authorize($scopes);
   }
 }
