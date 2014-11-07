@@ -328,7 +328,7 @@ function openid_connect_sso_exit($destination = NULL) {
  */
 function openid_connect_sso_boot() {
   // Disable the page cache if the login cookie is set.
-  if (!empty($_COOKIE['Drupal_visitor_SSOLogin'])) {
+  if (openid_connect_sso_detect_cookie('login')) {
     drupal_page_is_cacheable(FALSE);
   }
 }
