@@ -329,8 +329,8 @@ function openid_connect_sso_exit($destination = NULL) {
 function openid_connect_sso_boot() {
   // Disable the page cache if the login cookie is set.
   // This requires a core patch from issue #322104:
-  // https://www.drupal.org/files/issues/hook_boot_may_defer_cache-7.x-322104-38.patch
+  // https://www.drupal.org/files/issues/hook_boot_may_defer_cache-7.x-322104-45.patch
   if (openid_connect_sso_detect_cookie('login')) {
-    $GLOBALS['conf']['skip_cache'] = TRUE;
+    drupal_page_is_cacheable(FALSE);
   }
 }
